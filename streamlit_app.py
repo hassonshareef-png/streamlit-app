@@ -59,8 +59,8 @@ if not st.session_state.authenticated:
 TOKEN = st.session_state.token
 np.random.seed(42)
 
-st.sidebar.markdown("## NexaDash")
-page = st.sidebar.radio('Navigation', ['Home','Dashboard','Analytics','Projects','Settings','Reports'], label_visibility="collapsed")
+st.sidebar.markdown("## Menu")
+page = st.sidebar.radio('Navigation', ['Home','Dashboard','Analytics','Projects','Pricing','Settings','Reports'], label_visibility="collapsed")
 st.sidebar.markdown('---')
 st.sidebar.markdown(f"**{st.session_state.username.capitalize()}**")
 st.sidebar.caption(f"Plan: {st.session_state.plan}")
@@ -70,8 +70,7 @@ if st.sidebar.button('Sign Out', use_container_width=True):
     st.rerun()
 
 def chart_layout():
-    return {'paper_bgcolor':'#1e2130','plot_bgcolor':'#1e2130','font':dict(color='#aaa'),'margin':dict(l=20,r=20,t=20,b=20),'hovermode':'x unified'}
-
+    return {'paper_bgcolor':'#1e2130','plot_bgcolor':'#1e2130','font':dict(color='#aaa'),'margin':dict(l=20,r=20,t=20,b=20)}
 if page == 'Home':
     st.title(f'Welcome back, {st.session_state.username.capitalize()}!')
     metrics = api_get("/api/metrics", TOKEN) or fallback_metrics()
@@ -81,6 +80,19 @@ if page == 'Home':
     c3.metric('Conversion', metrics["conversion"]["value"], metrics["conversion"]["change"], delta_color="off")
     c4.metric('Avg Session', metrics["avg_session"]["value"], metrics["avg_session"]["change"], delta_color="off")
     st.markdown('---')
+    rev = api_get("/api/revenue?days=30", TOKEN)
+    days = rev["days"] if rev else list(range(1,31))
+    vals = rev["revenue"] if rev else (np.cumsum(np.random.randint(2000,5000,30))+40000).tolist()
+    fig = go.Figure(go.Scatter(x=days,y=vals,fill='tozeroy',line=dict(color='#7c83fd',width=2),fillcolor='rgba(124,131,253,0.15)'))
+    fig.update_layout(chart_layout())
+    st.plotly_chart(fig, use_container_width=True)
+    notifs = api_get("/api/notifications", TOKEN)
+    count = notifs["count"] if notifs else 3
+    a,b,c = st.columns(3)
+    with a: st.info(f'{count} notifications pending')
+    with b: st.success('12 tasks completed today')
+    with c: st.warning('2 issues need attention')
+
 elif page == 'Dashboard':
     st.title('Dashboard')
     metrics = api_get("/api/metrics", TOKEN) or fallback_metrics()
@@ -132,7 +144,7 @@ elif page == 'Analytics':
         st.subheader('User Retention')
         ret = analytics["retention"] if analytics else {"weeks":["Wk1","Wk2","Wk3","Wk4"],"values":[100,68,52,43]}
         fig2 = go.Figure(go.Scatter(x=ret["weeks"],y=ret["values"],mode='lines+markers',line=dict(color='#3fb950',width=3),fill='tozeroy'))
-        fig2.update_layout(chart_layout())
+        fig2.update_layout(chart_layout()); fig2.update_yaxes(range=[0,110])
         st.plotly_chart(fig2,use_container_width=True)
     m = analytics["metrics"] if analytics else {"bounce_rate":{"value":"42.3%","change":"-2.1%"},"avg_page_load":{"value":"1.23s","change":"-0.15s"},"mobile_traffic":{"value":"68%","change":"+5.2%"}}
     a1,a2,a3 = st.columns(3)
@@ -151,66 +163,110 @@ elif page == 'Projects':
         {"name":"Data Pipeline","progress":60,"status":"On Track","color":"green"},
     ]
     for p in projects:
+        icon = {"green":"[ON]","yellow":"[WIP]","red":"[!]"}.get(p["color"],"[?]")
         col1,col2 = st.columns([3,1])
         with col1:
-            st.markdown(f"**{p['name']}** - {p['status']}")
+            st.markdown(f"**{icon} {p['name']}** - {p['status']}")
             st.progress(p["progress"]/100)
         with col2:
             st.metric("Progress",f"{p['progress']}%",label_visibility="collapsed")
         st.markdown("---")
-
+elif page == 'Pricing':
+    st.title('Choose Your Plan')
+    st.markdown('<p style="color:#aaa;font-size:18px;">Unlock the full power of NexaDash. No contracts, cancel anytime.</p>', unsafe_allow_html=True)
+    st.markdown('---')
+    st.markdown("""
+    <style>
+    .plan-card{background:#1e2130;border-radius:16px;padding:32px;border:1px solid #30363d;transition:all 0.3s;}
+    .plan-card.featured{border:2px solid #7c83fd;box-shadow:0 0 24px rgba(124,131,253,0.25);}
+    .plan-title{font-size:26px;font-weight:700;margin-bottom:4px;}
+    .plan-price{font-size:48px;font-weight:800;margin:12px 0;}
+    .plan-price span{font-size:18px;font-weight:400;color:#aaa;}
+    .plan-feature{padding:6px 0;color:#ccc;font-size:15px;}
+    .plan-feature::before{content:'+ ';color:#7c83fd;font-weight:700;}
+    .plan-badge{background:linear-gradient(135deg,#7c83fd,#bf7cfd);color:white;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:600;display:inline-block;margin-bottom:12px;}
+    </style>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns(2, gap="large")
+    with col1:
+        st.markdown("""
+        <div class="plan-card">
+          <div class="plan-title" style="color:#7c83fd;">GOD MODE</div>
+          <div class="plan-price">$4.99<span>/mo</span></div>
+          <hr style="border-color:#30363d;">
+          <div class="plan-feature">Full Dashboard Access</div>
+          <div class="plan-feature">Real-Time Analytics</div>
+          <div class="plan-feature">Project Tracker</div>
+          <div class="plan-feature">Revenue Insights</div>
+          <div class="plan-feature">Priority Support</div>
+          <div class="plan-feature">API Access</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('<br>', unsafe_allow_html=True)
+        god_link = "https://buy.stripe.com/GOD_MODE_STRIPE_LINK"
+        st.markdown(f'<a href="{god_link}" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#7c83fd,#5865f2);color:white;padding:14px;border-radius:10px;font-weight:700;font-size:17px;text-decoration:none;">Subscribe to GOD MODE</a>', unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div class="plan-card featured">
+          <div class="plan-badge">MOST POWERFUL</div><br>
+          <div class="plan-title" style="background:linear-gradient(135deg,#bf7cfd,#ff6eb4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">UNIVERSE MODE</div>
+          <div class="plan-price" style="background:linear-gradient(135deg,#bf7cfd,#ff6eb4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">$9.99<span style="-webkit-text-fill-color:#aaa;">/mo</span></div>
+          <hr style="border-color:#30363d;">
+          <div class="plan-feature">Everything in GOD MODE</div>
+          <div class="plan-feature">AI-Powered Forecasting</div>
+          <div class="plan-feature">Custom Integrations</div>
+          <div class="plan-feature">Team Collaboration</div>
+          <div class="plan-feature">White-Label Reports</div>
+          <div class="plan-feature">Dedicated Account Manager</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('<br>', unsafe_allow_html=True)
+        universe_link = "https://buy.stripe.com/UNIVERSE_MODE_STRIPE_LINK"
+        st.markdown(f'<a href="{universe_link}" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#bf7cfd,#ff6eb4);color:white;padding:14px;border-radius:10px;font-weight:700;font-size:17px;text-decoration:none;">Subscribe to UNIVERSE MODE</a>', unsafe_allow_html=True)
+    st.markdown('<br><br>', unsafe_allow_html=True)
+    with st.expander('FAQ'):
+        st.markdown('**Can I cancel anytime?** Yes, cancel with one click from your billing portal.')
+        st.markdown('**Is there a free trial?** Sign in and use the demo dashboard for free before subscribing.')
+        st.markdown('**What payment methods?** All major credit/debit cards via Stripe.')
+    st.markdown('<p style="text-align:center;color:#555;margin-top:24px;">Secured by Stripe. Your payment info is never stored on our servers.</p>', unsafe_allow_html=True)
 elif page == 'Settings':
     st.title('Settings')
-    user_data = api_get("/api/user/me", TOKEN)
-    tab1,tab2,tab3 = st.tabs(["Profile","Preferences","Security"])
-    with tab1:
-        with st.form("profile_form"):
-            st.text_input("Name", value=user_data["name"] if user_data else st.session_state.username.capitalize())
-            st.text_input("Email", value=user_data["email"] if user_data else "admin@nexadash.io")
-            st.text_area("Bio", value="Data enthusiast and dashboard builder")
-            if st.form_submit_button("Save Profile",use_container_width=True): st.success("Profile updated!")
-    with tab2:
-        with st.form("preferences_form"):
-            st.selectbox("Theme",["Dark","Light"],index=0)
-            st.toggle("Email Notifications",value=True)
-            st.slider("Refresh Interval (s)",10,300,60)
-            if st.form_submit_button("Save Preferences",use_container_width=True): st.success("Preferences saved!")
-    with tab3:
-        st.info("Secured with JWT via the NexaDash API.")
-        with st.form("security_form"):
-            st.text_input("Current Password",type="password")
-            np_ = st.text_input("New Password",type="password")
-            cp_ = st.text_input("Confirm Password",type="password")
-            if st.form_submit_button("Change Password",use_container_width=True):
-                st.success("Password changed!") if np_==cp_ else st.error("Passwords do not match!")
+    st.subheader('Profile')
+    c1,c2 = st.columns(2)
+    with c1:
+        st.text_input('Display Name', value=st.session_state.username.capitalize())
+        st.text_input('Email', value='admin@nexadash.io')
+    with c2:
+        st.selectbox('Timezone', ['UTC-5 (EST)', 'UTC+0 (GMT)', 'UTC+1 (CET)', 'UTC+8 (SGT)'])
+        st.selectbox('Language', ['English', 'Spanish', 'French', 'German'])
+    st.markdown('---')
+    st.subheader('Notifications')
+    st.toggle('Email Alerts', value=True)
+    st.toggle('Slack Notifications', value=False)
+    st.toggle('Weekly Digest', value=True)
+    st.markdown('---')
+    st.subheader('API')
+    st.code(f'Bearer {TOKEN[:20]}...', language=None)
+    st.caption('Keep this token secret.')
+    if st.button('Save Settings', type='primary'):
+        st.success('Settings saved!')
 
 elif page == 'Reports':
     st.title('Reports')
-    report_type = st.selectbox("Report Type",["Revenue Summary","User Activity","Performance Metrics","Custom Report"])
-    col1,col2 = st.columns(2)
-    with col1: st.date_input("Report Date",value=datetime.now())
-    with col2: st.selectbox("Export Format",["PDF","CSV","Excel"])
-    if st.button("Generate Report",use_container_width=True):
-        with st.spinner("Fetching from API..."):
-            report = api_get(f"/api/reports?report_type={report_type.replace(' ','%20')}", TOKEN)
-        if report:
-            st.success(f"{report['report_type']} generated at {report['generated_at'][:19]}")
-            st.dataframe(pd.DataFrame(report["summary"]),use_container_width=True,hide_index=True)
-            with st.expander("Detailed Analysis"):
-                for line in report["analysis"]: st.write(f"- {line}")
-        else:
-            st.warning("API warming up, showing cached data.")
-            st.dataframe(pd.DataFrame({'Metric':['Revenue','Users','Conversion','Uptime'],'Current':['$84,320','14,892','3.72%','99.97%'],'Change':['+12.4%','+8.1%','+0.27%','+0.02%']}),use_container_width=True,hide_index=True)
-
-    rev = api_get("/api/revenue?days=30", TOKEN)
-    days = rev["days"] if rev else list(range(1,31))
-    vals = rev["revenue"] if rev else (np.cumsum(np.random.randint(2000,5000,30))+40000).tolist()
-    fig = go.Figure(go.Scatter(x=days,y=vals,fill='tozeroy',line=dict(color='#7c83fd',width=2),fillcolor='rgba(124,131,253,0.15)'))
-    fig.update_layout(chart_layout())
-    st.plotly_chart(fig, use_container_width=True)
-    notifs = api_get("/api/notifications", TOKEN)
-    count = notifs["count"] if notifs else 3
-    a,b,c = st.columns(3)
-    with a: st.info(f'{count} notifications pending')
-    with b: st.success('12 tasks completed today')
-    with c: st.warning('2 issues need attention')
+    reports = api_get("/api/reports", TOKEN)
+    reps = reports["reports"] if reports else [
+        {"title":"Q1 2026 Revenue Report","date":"2026-04-01","type":"Financial","status":"Ready"},
+        {"title":"User Growth Analysis","date":"2026-05-15","type":"Analytics","status":"Ready"},
+        {"title":"Infrastructure Audit","date":"2026-05-28","type":"Technical","status":"Processing"},
+        {"title":"Marketing ROI","date":"2026-06-01","type":"Marketing","status":"Ready"},
+        {"title":"Churn Analysis","date":"2026-06-04","type":"Analytics","status":"Ready"},
+    ]
+    filter_type = st.selectbox('Filter by Type', ['All','Financial','Analytics','Technical','Marketing'])
+    filtered = [r for r in reps if filter_type=='All' or r['type']==filter_type]
+    df = pd.DataFrame(filtered)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.markdown('---')
+    r1,r2,r3 = st.columns(3)
+    r1.metric('Total Reports', len(reps))
+    r2.metric('Ready', sum(1 for r in reps if r['status']=='Ready'))
+    r3.metric('Processing', sum(1 for r in reps if r['status']=='Processing'))
