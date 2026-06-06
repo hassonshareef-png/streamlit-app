@@ -203,7 +203,7 @@ elif page == 'Pricing':
         </div>
         """, unsafe_allow_html=True)
         st.markdown('<br>', unsafe_allow_html=True)
-        god_link = "https://buy.stripe.com/GOD_MODE_STRIPE_LINK"
+        god_link = "https://buy.stripe.com/3cIbJ1aSzaKdbRq77tc7u01"
         st.markdown(f'<a href="{god_link}" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#7c83fd,#5865f2);color:white;padding:14px;border-radius:10px;font-weight:700;font-size:17px;text-decoration:none;">Subscribe to GOD MODE</a>', unsafe_allow_html=True)
     with col2:
         st.markdown("""
@@ -221,7 +221,7 @@ elif page == 'Pricing':
         </div>
         """, unsafe_allow_html=True)
         st.markdown('<br>', unsafe_allow_html=True)
-        universe_link = "https://buy.stripe.com/UNIVERSE_MODE_STRIPE_LINK"
+        universe_link = "https://buy.stripe.com/14A6oHgcT7y1cVufDZc7u00"
         st.markdown(f'<a href="{universe_link}" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#bf7cfd,#ff6eb4);color:white;padding:14px;border-radius:10px;font-weight:700;font-size:17px;text-decoration:none;">Subscribe to UNIVERSE MODE</a>', unsafe_allow_html=True)
     st.markdown('<br><br>', unsafe_allow_html=True)
     with st.expander('FAQ'):
