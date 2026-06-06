@@ -2,393 +2,215 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
-import hashlib
+import requests
 from datetime import datetime, timedelta
 
-# Page Config
-st.set_page_config(
-    page_title='NexaDash',
-    page_icon='📊',
-    layout='wide',
-    initial_sidebar_state='expanded'
-)
+API_URL = "https://nexadash-backend.onrender.com"
 
-# Custom CSS
-st.markdown("""
-<style>
-    [data-testid="stMetricValue"] {
-        font-size: 2rem;
-    }
-    .metric-increase {
-        color: #3fb950;
-    }
-    .metric-decrease {
-        color: #f78166;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title='NexaDash', page_icon='N', layout='wide', initial_sidebar_state='expanded')
 
-# Authentication - passwords SHA-256 hashed. Default password: NexaDash2026!
-USERS = {
-    "admin": "99051091580170494132cc07c5bfbd956bdce00ebc0ceded5808316d3efa3ffc",
-    "hass": "99051091580170494132cc07c5bfbd956bdce00ebc0ceded5808316d3efa3ffc",
-}
+def api_login(username, password):
+    try:
+        r = requests.post(f"{API_URL}/auth/login", json={"username": username, "password": password}, timeout=15)
+        return r.json() if r.status_code == 200 else None
+    except:
+        return None
 
-USER_PLANS = {
-    "admin": "Enterprise",
-    "hass": "Pro"
-}
+def api_get(endpoint, token):
+    try:
+        r = requests.get(f"{API_URL}{endpoint}", headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        return r.json() if r.status_code == 200 else None
+    except:
+        return None
 
-def _hash(pw):
-    """Hash password using SHA-256"""
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-def init_session_state():
-    """Initialize session state variables"""
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-        st.session_state.username = ""
-        st.session_state.login_time = None
-    if "theme" not in st.session_state:
-        st.session_state.theme = "Dark"
-
-# Initialize session state
-init_session_state()
-
-def login_page():
-    """Display login page"""
-    st.markdown("""
-        <style>
-            [data-testid="stAppViewContainer"]{background:#0f1117;}
-            [data-testid="stSidebar"]{display:none;}
-            .block-container{max-width:420px;margin:10vh auto;}
-        </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("# 📊 NexaDash")
-    st.markdown("**Sign in to access your dashboard.**")
-    st.markdown("---")
-    
-    with st.form("login_form"):
-        username = st.text_input("Username", placeholder="Enter username")
-        password = st.text_input("Password", type="password", placeholder="Enter password")
-        submitted = st.form_submit_button("Sign In", use_container_width=True)
-        
-        if submitted:
-            if username in USERS and USERS[username] == _hash(password):
-                st.session_state.authenticated = True
-                st.session_state.username = username
-                st.session_state.login_time = datetime.now()
-                st.rerun()
-            else:
-                st.error("❌ Invalid username or password.")
-                st.info("Demo credentials: username='admin', password='NexaDash2026!'")
-
-def render_sidebar():
-    """Render sidebar with navigation and user info"""
-    st.sidebar.markdown("## Menu")
-    page = st.sidebar.radio('Navigation', 
-        ['Home', 'Dashboard', 'Analytics', 'Projects', 'Settings', 'Reports'],
-        label_visibility="collapsed"
-    )
-    
-    st.sidebar.markdown('---')
-    
-    # User info
-    user_col1, user_col2 = st.sidebar.columns([2, 1])
-    with user_col1:
-        st.sidebar.markdown(f"**{st.session_state.username.capitalize()}**")
-        st.sidebar.caption(f"Plan: {USER_PLANS.get(st.session_state.username, 'Pro')}")
-    
-    with user_col2:
-        if st.sidebar.button('🚪 Sign Out', use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.username = ""
-            st.session_state.login_time = None
-            st.rerun()
-    
-    return page
-
-def get_chart_template():
-    """Return common chart styling"""
+def fallback_metrics():
     return {
-        'paper_bgcolor': '#1e2130',
-        'plot_bgcolor': '#1e2130',
-        'font': dict(color='#aaa', family='Arial'),
-        'margin': dict(l=20, r=20, t=20, b=20),
-        'hovermode': 'x unified'
+        "revenue": {"value": "$84,320", "change": "+12.4%"},
+        "active_users": {"value": "14,892", "change": "+8.1%"},
+        "conversion": {"value": "3.72%", "change": "+0.5%"},
+        "avg_session": {"value": "4m 12s", "change": "+22s"},
+        "uptime": {"value": "99.97%", "change": "+0.01%"},
     }
 
-def generate_time_series(days=30, base=40000, noise_range=(2000, 5000)):
-    """Generate realistic time series data"""
-    return np.cumsum(np.random.randint(noise_range[0], noise_range[1], days)) + base
+for k, v in {"authenticated": False, "username": "", "token": "", "plan": ""}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# Main App Logic
 if not st.session_state.authenticated:
-    login_page()
+    st.markdown("# NexaDash Enterprise Dashboard")
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign In", use_container_width=True)
+    if submitted:
+        with st.spinner("Authenticating via API..."):
+            result = api_login(username, password)
+        if result:
+            st.session_state.authenticated = True
+            st.session_state.username = result["username"]
+            st.session_state.token = result["access_token"]
+            st.session_state.plan = result["plan"]
+            st.rerun()
+        else:
+            st.error("Invalid credentials. API may be warming up, try again in 30s.")
+    st.info("Demo: username='admin'  password='NexaDash2026!'")
     st.stop()
 
-# Authenticated App
+TOKEN = st.session_state.token
 np.random.seed(42)
 
-page = render_sidebar()
+st.sidebar.markdown("## NexaDash")
+page = st.sidebar.radio('Navigation', ['Home','Dashboard','Analytics','Projects','Settings','Reports'], label_visibility="collapsed")
+st.sidebar.markdown('---')
+st.sidebar.markdown(f"**{st.session_state.username.capitalize()}**")
+st.sidebar.caption(f"Plan: {st.session_state.plan}")
+if st.sidebar.button('Sign Out', use_container_width=True):
+    for k in ["authenticated","username","token","plan"]:
+        st.session_state[k] = False if k == "authenticated" else ""
+    st.rerun()
+
+def chart_layout():
+    return {'paper_bgcolor':'#1e2130','plot_bgcolor':'#1e2130','font':dict(color='#aaa'),'margin':dict(l=20,r=20,t=20,b=20),'hovermode':'x unified'}
 
 if page == 'Home':
-    st.title(f'👋 Welcome back, {st.session_state.username.capitalize()}!')
-    
-    # Metrics Row
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric('💰 Revenue', '$84,320', '+12.4%', delta_color="off")
-    col2.metric('👥 Active Users', '14,892', '+8.1%', delta_color="off")
-    col3.metric('📈 Conversion', '3.72%', '+0.5%', delta_color="off")
-    col4.metric('⏱️ Avg Session', '4m 12s', '+22s', delta_color="off")
-    
+    st.title(f'Welcome back, {st.session_state.username.capitalize()}!')
+    metrics = api_get("/api/metrics", TOKEN) or fallback_metrics()
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric('Revenue', metrics["revenue"]["value"], metrics["revenue"]["change"], delta_color="off")
+    c2.metric('Active Users', metrics["active_users"]["value"], metrics["active_users"]["change"], delta_color="off")
+    c3.metric('Conversion', metrics["conversion"]["value"], metrics["conversion"]["change"], delta_color="off")
+    c4.metric('Avg Session', metrics["avg_session"]["value"], metrics["avg_session"]["change"], delta_color="off")
     st.markdown('---')
-    
-    # Revenue Trend Chart
-    st.subheader('💹 Revenue Trend')
-    days = list(range(1, 31))
-    rev = generate_time_series()
-    
-    fig = go.Figure(go.Scatter(
-        x=days, 
-        y=rev, 
-        fill='tozeroy', 
-        name='Revenue',
-        line=dict(color='#7c83fd', width=2),
-        fillcolor='rgba(124,131,253,0.15)'
-    ))
-    fig.update_layout(get_chart_template())
-    fig.update_xaxes(gridcolor='#2d3250')
-    fig.update_yaxes(gridcolor='#2d3250')
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Quick Stats
-    st.subheader('📊 Quick Stats')
-    stat_col1, stat_col2, stat_col3 = st.columns(3)
-    with stat_col1:
-        st.info('🔔 **3** notifications pending')
-    with stat_col2:
-        st.success('✅ **12** tasks completed today')
-    with stat_col3:
-        st.warning('⚠️ **2** issues need attention')
-
 elif page == 'Dashboard':
-    st.title('📋 Dashboard')
-    
-    # Metrics
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric('💰 Revenue', '$84,320', '+12.4%', delta_color="off")
-    col2.metric('👥 Active Users', '14,892', '+8.1%', delta_color="off")
-    col3.metric('📈 Conversion', '3.72%', '+0.5%', delta_color="off")
-    col4.metric('✨ Uptime', '99.97%', '+0.01%', delta_color="off")
-    
+    st.title('Dashboard')
+    metrics = api_get("/api/metrics", TOKEN) or fallback_metrics()
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric('Revenue', metrics["revenue"]["value"], metrics["revenue"]["change"], delta_color="off")
+    c2.metric('Active Users', metrics["active_users"]["value"], metrics["active_users"]["change"], delta_color="off")
+    c3.metric('Conversion', metrics["conversion"]["value"], metrics["conversion"]["change"], delta_color="off")
+    c4.metric('Uptime', metrics["uptime"]["value"], metrics["uptime"]["change"], delta_color="off")
     st.markdown('---')
-    
-    # Charts Row
-    L, R = st.columns([2, 1])
-    
+    L,R = st.columns([2,1])
     with L:
-        st.subheader('📈 Monthly Revenue')
-        days = list(range(1, 31))
-        rev = generate_time_series()
-        
+        st.subheader('Monthly Revenue')
+        rev = api_get("/api/revenue?days=30", TOKEN)
+        days = rev["days"] if rev else list(range(1,31))
+        vals = rev["revenue"] if rev else (np.cumsum(np.random.randint(2000,5000,30))+40000).tolist()
+        tgt = rev["target"] if rev else np.linspace(vals[0],vals[-1]*1.1,30).tolist()
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=days, 
-            y=rev, 
-            fill='tozeroy', 
-            name='Revenue',
-            line=dict(color='#7c83fd', width=2),
-            fillcolor='rgba(124,131,253,0.15)'
-        ))
-        fig.add_trace(go.Scatter(
-            x=days, 
-            y=np.linspace(rev[0], rev[-1]*1.1, 30),
-            name='Target', 
-            line=dict(color='#3fb950', dash='dash')
-        ))
-        fig.update_layout(get_chart_template())
-        fig.update_xaxes(gridcolor='#2d3250')
-        fig.update_yaxes(gridcolor='#2d3250')
-        st.plotly_chart(fig, use_container_width=True)
-    
+        fig.add_trace(go.Scatter(x=days,y=vals,fill='tozeroy',name='Revenue',line=dict(color='#7c83fd',width=2),fillcolor='rgba(124,131,253,0.15)'))
+        fig.add_trace(go.Scatter(x=days,y=tgt,name='Target',line=dict(color='#3fb950',dash='dash')))
+        fig.update_layout(chart_layout())
+        st.plotly_chart(fig,use_container_width=True)
     with R:
-        st.subheader('🚀 Traffic Sources')
-        fig2 = go.Figure(go.Pie(
-            labels=['Organic', 'Paid', 'Referral', 'Social', 'Direct'],
-            values=[38, 27, 15, 12, 8],
-            hole=0.55,
-            marker=dict(colors=['#7c83fd','#3fb950','#f78166','#e3b300','#79c0ff'])
-        ))
-        fig2.update_layout({
-            'paper_bgcolor': '#1e2130',
-            'font': dict(color='#aaa'),
-            'margin': dict(l=10, r=10, t=10, b=10)
-        })
-        st.plotly_chart(fig2, use_container_width=True)
-    
-    st.subheader('💳 Recent Transactions')
-    transactions_df = pd.DataFrame({
-        'Date': ['May 10', 'May 9', 'May 9', 'May 8', 'May 7'],
-        'User': ['Alice M.', 'Bob K.', 'Carol T.', 'Dan R.', 'Eve S.'],
-        'Plan': ['Pro', 'Team', 'Pro', 'Starter', 'Team'],
-        'Amount': ['$2,450', '$1,980', '$2,450', '$499', '$1,980'],
-        'Status': ['✅ Completed', '✅ Completed', '⏳ Processing', '✅ Completed', '✅ Completed']
-    })
-    st.dataframe(transactions_df, use_container_width=True, hide_index=True)
+        st.subheader('Traffic Sources')
+        traffic = api_get("/api/traffic", TOKEN)
+        labels = traffic["sources"] if traffic else ['Organic','Paid','Referral','Social','Direct']
+        values = traffic["values"] if traffic else [38,27,15,12,8]
+        fig2 = go.Figure(go.Pie(labels=labels,values=values,hole=0.55,marker=dict(colors=['#7c83fd','#3fb950','#f78166','#e3b300','#79c0ff'])))
+        fig2.update_layout({'paper_bgcolor':'#1e2130','font':dict(color='#aaa'),'margin':dict(l=10,r=10,t=10,b=10)})
+        st.plotly_chart(fig2,use_container_width=True)
+    st.subheader('Recent Transactions')
+    tx = api_get("/api/transactions", TOKEN)
+    if tx:
+        st.dataframe(pd.DataFrame(tx["transactions"]),use_container_width=True,hide_index=True)
+    else:
+        st.info("Loading transactions...")
 
 elif page == 'Analytics':
-    st.title('📊 Analytics')
-    
-    # Date range selector
-    col1, col2 = st.columns(2)
+    st.title('Analytics')
+    analytics = api_get("/api/analytics?days=30", TOKEN)
+    col1,col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", value=datetime.now() - timedelta(days=30))
+        st.subheader('Daily Active Users')
+        days = analytics["days"] if analytics else list(range(1,31))
+        dau = analytics["dau"] if analytics else np.random.randint(8000,16000,30).tolist()
+        fig = go.Figure(go.Bar(x=days,y=dau,marker_color='#7c83fd'))
+        fig.update_layout(chart_layout())
+        st.plotly_chart(fig,use_container_width=True)
     with col2:
-        end_date = st.date_input("End Date", value=datetime.now())
-    
-    st.markdown('---')
-    
-    # Charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader('👥 Daily Active Users')
-        days = list(range(1, 31))
-        dau = np.random.randint(8000, 16000, 30)
-        
-        fig = go.Figure(go.Bar(
-            x=days, 
-            y=dau, 
-            marker_color='#7c83fd',
-            name='DAU'
-        ))
-        fig.update_layout(get_chart_template())
-        fig.update_xaxes(gridcolor='#2d3250')
-        fig.update_yaxes(gridcolor='#2d3250')
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.subheader('📉 User Retention')
-        fig2 = go.Figure(go.Scatter(
-            x=['Wk1', 'Wk2', 'Wk3', 'Wk4'],
-            y=[100, 68, 52, 43],
-            mode='lines+markers',
-            line=dict(color='#3fb950', width=3),
-            marker=dict(size=10),
-            fill='tozeroy',
-            name='Retention %'
-        ))
-        fig2.update_layout(get_chart_template())
-        fig2.update_yaxes(range=[0, 110], gridcolor='#2d3250')
-        fig2.update_xaxes(gridcolor='#2d3250')
-        st.plotly_chart(fig2, use_container_width=True)
-    
-    # Additional Analytics
-    st.subheader('🔍 Detailed Metrics')
-    analytics_col1, analytics_col2, analytics_col3 = st.columns(3)
-    
-    with analytics_col1:
-        st.metric("Bounce Rate", "42.3%", "-2.1%", delta_color="off")
-    with analytics_col2:
-        st.metric("Avg Page Load", "1.23s", "-0.15s", delta_color="off")
-    with analytics_col3:
-        st.metric("Mobile Traffic", "68%", "+5.2%", delta_color="off")
+        st.subheader('User Retention')
+        ret = analytics["retention"] if analytics else {"weeks":["Wk1","Wk2","Wk3","Wk4"],"values":[100,68,52,43]}
+        fig2 = go.Figure(go.Scatter(x=ret["weeks"],y=ret["values"],mode='lines+markers',line=dict(color='#3fb950',width=3),fill='tozeroy'))
+        fig2.update_layout(chart_layout())
+        st.plotly_chart(fig2,use_container_width=True)
+    m = analytics["metrics"] if analytics else {"bounce_rate":{"value":"42.3%","change":"-2.1%"},"avg_page_load":{"value":"1.23s","change":"-0.15s"},"mobile_traffic":{"value":"68%","change":"+5.2%"}}
+    a1,a2,a3 = st.columns(3)
+    a1.metric("Bounce Rate",m["bounce_rate"]["value"],m["bounce_rate"]["change"],delta_color="off")
+    a2.metric("Avg Page Load",m["avg_page_load"]["value"],m["avg_page_load"]["change"],delta_color="off")
+    a3.metric("Mobile Traffic",m["mobile_traffic"]["value"],m["mobile_traffic"]["change"],delta_color="off")
 
 elif page == 'Projects':
-    st.title('🎯 Projects')
-    
-    projects = [
-        ('NexaDash v2.0', 78, 'On Track', '🟢'),
-        ('Mobile Redesign', 45, 'In Progress', '🟡'),
-        ('API Integration', 91, 'Almost Done', '🟢'),
-        ('Marketing Campaign', 33, 'Delayed', '🔴'),
-        ('Data Pipeline', 60, 'On Track', '🟢'),
+    st.title('Projects')
+    pd_data = api_get("/api/projects", TOKEN)
+    projects = pd_data["projects"] if pd_data else [
+        {"name":"NexaDash v2.0","progress":78,"status":"On Track","color":"green"},
+        {"name":"Mobile Redesign","progress":45,"status":"In Progress","color":"yellow"},
+        {"name":"API Integration","progress":91,"status":"Almost Done","color":"green"},
+        {"name":"Marketing Campaign","progress":33,"status":"Delayed","color":"red"},
+        {"name":"Data Pipeline","progress":60,"status":"On Track","color":"green"},
     ]
-    
-    for name, pct, status, icon in projects:
-        col1, col2 = st.columns([3, 1])
+    for p in projects:
+        col1,col2 = st.columns([3,1])
         with col1:
-            st.markdown(f"**{icon} {name}** - {status}")
-            st.progress(pct / 100)
+            st.markdown(f"**{p['name']}** - {p['status']}")
+            st.progress(p["progress"]/100)
         with col2:
-            st.metric("Progress", f"{pct}%", label_visibility="collapsed")
+            st.metric("Progress",f"{p['progress']}%",label_visibility="collapsed")
         st.markdown("---")
 
 elif page == 'Settings':
-    st.title('⚙️ Settings')
-    
-    # Tabs
-    tab1, tab2, tab3 = st.tabs(["Profile", "Preferences", "Security"])
-    
+    st.title('Settings')
+    user_data = api_get("/api/user/me", TOKEN)
+    tab1,tab2,tab3 = st.tabs(["Profile","Preferences","Security"])
     with tab1:
-        st.subheader("Profile Settings")
         with st.form("profile_form"):
-            name = st.text_input("Name", value=st.session_state.username.capitalize())
-            email = st.text_input("Email", value="hassonshareef@gmail.com")
-            bio = st.text_area("Bio", value="Data enthusiast and dashboard builder")
-            
-            if st.form_submit_button("✅ Save Profile", use_container_width=True):
-                st.success("Profile updated successfully!")
-    
+            st.text_input("Name", value=user_data["name"] if user_data else st.session_state.username.capitalize())
+            st.text_input("Email", value=user_data["email"] if user_data else "admin@nexadash.io")
+            st.text_area("Bio", value="Data enthusiast and dashboard builder")
+            if st.form_submit_button("Save Profile",use_container_width=True): st.success("Profile updated!")
     with tab2:
-        st.subheader("Preferences")
         with st.form("preferences_form"):
-            theme = st.selectbox("Theme", ["Dark", "Light"], index=0)
-            notifications = st.toggle("Email Notifications", value=True)
-            auto_refresh = st.toggle("Auto-refresh Data", value=True)
-            refresh_interval = st.slider("Refresh Interval (seconds)", 10, 300, 60)
-            
-            if st.form_submit_button("✅ Save Preferences", use_container_width=True):
-                st.success("Preferences updated successfully!")
-    
+            st.selectbox("Theme",["Dark","Light"],index=0)
+            st.toggle("Email Notifications",value=True)
+            st.slider("Refresh Interval (s)",10,300,60)
+            if st.form_submit_button("Save Preferences",use_container_width=True): st.success("Preferences saved!")
     with tab3:
-        st.subheader("Security")
-        st.info("🔒 Your account is secure with 2FA enabled.")
-        
+        st.info("Secured with JWT via the NexaDash API.")
         with st.form("security_form"):
-            current_password = st.text_input("Current Password", type="password")
-            new_password = st.text_input("New Password", type="password")
-            confirm_password = st.text_input("Confirm Password", type="password")
-            
-            if st.form_submit_button("✅ Change Password", use_container_width=True):
-                if new_password == confirm_password:
-                    st.success("Password changed successfully!")
-                else:
-                    st.error("Passwords do not match!")
+            st.text_input("Current Password",type="password")
+            np_ = st.text_input("New Password",type="password")
+            cp_ = st.text_input("Confirm Password",type="password")
+            if st.form_submit_button("Change Password",use_container_width=True):
+                st.success("Password changed!") if np_==cp_ else st.error("Passwords do not match!")
 
 elif page == 'Reports':
-    st.title('📄 Reports')
-    
-    report_type = st.selectbox(
-        "Select Report Type",
-        ["Revenue Summary", "User Activity", "Performance Metrics", "Custom Report"]
-    )
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        report_date = st.date_input("Report Date", value=datetime.now())
-    with col2:
-        export_format = st.selectbox("Export Format", ["PDF", "CSV", "Excel"])
-    
-    if st.button("📥 Generate Report", use_container_width=True):
-        st.success(f"✅ {report_type} generated successfully!")
-        
-        # Sample data
-        report_data = pd.DataFrame({
-            'Metric': ['Revenue', 'Users', 'Conversion', 'Uptime'],
-            'Current': ['$84,320', '14,892', '3.72%', '99.97%'],
-            'Previous': ['$75,100', '13,750', '3.45%', '99.95%'],
-            'Change': ['+12.4%', '+8.1%', '+0.27%', '+0.02%']
-        })
-        
-        st.dataframe(report_data, use_container_width=True, hide_index=True)
-        
-        with st.expander("📊 Detailed Analysis"):
-            st.write("""
-            - Revenue increased significantly due to new enterprise clients
-            - User growth is consistent with marketing campaigns
-            - Conversion rate improved with recent UI updates
-            - System uptime remains excellent with 99.97% availability
-            """)
+    st.title('Reports')
+    report_type = st.selectbox("Report Type",["Revenue Summary","User Activity","Performance Metrics","Custom Report"])
+    col1,col2 = st.columns(2)
+    with col1: st.date_input("Report Date",value=datetime.now())
+    with col2: st.selectbox("Export Format",["PDF","CSV","Excel"])
+    if st.button("Generate Report",use_container_width=True):
+        with st.spinner("Fetching from API..."):
+            report = api_get(f"/api/reports?report_type={report_type.replace(' ','%20')}", TOKEN)
+        if report:
+            st.success(f"{report['report_type']} generated at {report['generated_at'][:19]}")
+            st.dataframe(pd.DataFrame(report["summary"]),use_container_width=True,hide_index=True)
+            with st.expander("Detailed Analysis"):
+                for line in report["analysis"]: st.write(f"- {line}")
+        else:
+            st.warning("API warming up, showing cached data.")
+            st.dataframe(pd.DataFrame({'Metric':['Revenue','Users','Conversion','Uptime'],'Current':['$84,320','14,892','3.72%','99.97%'],'Change':['+12.4%','+8.1%','+0.27%','+0.02%']}),use_container_width=True,hide_index=True)
+
+    rev = api_get("/api/revenue?days=30", TOKEN)
+    days = rev["days"] if rev else list(range(1,31))
+    vals = rev["revenue"] if rev else (np.cumsum(np.random.randint(2000,5000,30))+40000).tolist()
+    fig = go.Figure(go.Scatter(x=days,y=vals,fill='tozeroy',line=dict(color='#7c83fd',width=2),fillcolor='rgba(124,131,253,0.15)'))
+    fig.update_layout(chart_layout())
+    st.plotly_chart(fig, use_container_width=True)
+    notifs = api_get("/api/notifications", TOKEN)
+    count = notifs["count"] if notifs else 3
+    a,b,c = st.columns(3)
+    with a: st.info(f'{count} notifications pending')
+    with b: st.success('12 tasks completed today')
+    with c: st.warning('2 issues need attention')
