@@ -1,4 +1,28 @@
 import streamlit as st
+
+# -----------------------------
+# GODMODE++ MAINTENANCE ACCESS
+# -----------------------------
+if "authorized" not in st.session_state:
+    st.session_state["authorized"] = False
+
+st.title("GODMODE++ Access Gate")
+
+# If user is NOT authorized yet, show the gate
+if not st.session_state["authorized"]:
+    code = st.text_input("Enter Access Code", type="password")
+
+    if code == "8118":
+        st.session_state["authorized"] = True
+        st.success("Access granted.")
+    elif code:
+        st.error("Invalid code. System under maintenance.")
+        st.stop()
+    else:
+        st.stop()
+
+
+import streamlit as st
 import itertools
 import random
 import math
