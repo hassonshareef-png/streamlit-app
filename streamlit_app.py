@@ -21,8 +21,10 @@ if not st.session_state["authorized"]:
     else:
         st.stop()
 
+# -----------------------------------------
+# NOW your real app code starts below here
+# -----------------------------------------
 
-import streamlit as st
 import itertools
 import random
 import math
